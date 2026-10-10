@@ -1,6 +1,6 @@
 # waybar-settings
 
-Qt6 Widgets GUI settings manager for [Waybar](https://github.com/Alexays/Waybar) (targets 0.15.0).
+Qt6 Widgets GUI settings manager for [Waybar](https://github.com/Alexays/Waybar).
 
 ## Features
 
@@ -11,14 +11,6 @@ Qt6 Widgets GUI settings manager for [Waybar](https://github.com/Alexays/Waybar)
   - 15 predefined color schemes (Catppuccin x4, Gruvbox dark/light, Nord, Dracula, Tokyo Night,
     Solarized dark/light, Rose Pine, One Dark, Everforest, Kanagawa) or custom colors.
   - Font, size, opacity, module radius/padding, live preview over dark and light wallpapers.
-
-## Readability guarantees
-
-Whatever scheme or custom colors are chosen, the generated CSS is adjusted so that:
-
-- bar text has at least 4.5:1 contrast with the bar background;
-- opacity is raised if needed so text stays readable over any wallpaper;
-- accent/warning/critical fills are at least 3:1 against the bar, with text on them at least 4.5:1.
 
 Adjustments are listed in the Style tab. Your original color picks are kept in the file.
 
@@ -39,12 +31,3 @@ Requires Qt6 Widgets and CMake.
     cmake -B build && cmake --build build
     ./build/waybar-settings
     sudo cmake --install build
-
-## Packaging
-
-`waybar-settings.spec` is for OpenMandriva (`BuildSystem: cmake`). Tag releases as `0.2`, `0.3`, ...
-to match `Source0`. Verify with `abb build`.
-
-## License
-
-GPL-3.0-or-later (placeholder; add a LICENSE file and adjust as needed).
