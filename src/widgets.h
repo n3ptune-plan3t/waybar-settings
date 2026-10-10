@@ -168,7 +168,7 @@ class ModuleForm : public QWidget {
 
   void setReference(const QString &ref);
   QString reference() const { return ref_; }
-  QString cssSelector() const { return cssSelector(ref_); }
+  QString cssSelector() const { return ::ws::cssSelector(ref_); }
 
   void load(const QJsonObject &options, const ModuleStyle &style);
   void store(QJsonObject *options, ModuleStyle *style) const;

@@ -1,5 +1,5 @@
 // The style page: colour roles, typography, metrics and the underline, plus the
-// live bar preview that reacts to every change made anywhere in the window.
+// readability report for the palette that ends up in style.css.
 #pragma once
 
 #include <QWidget>

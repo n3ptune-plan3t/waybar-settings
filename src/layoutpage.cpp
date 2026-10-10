@@ -6,8 +6,11 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QHash>
+#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
+#include <QJsonArray>
+#include <QJsonValue>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -69,13 +72,13 @@ void ModuleList::dropEvent(QDropEvent *e) {
   const QStringList refs = QString::fromUtf8(e->mimeData()->data(QLatin1String(MODULE_MIME)))
                                .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
   QListWidgetItem *at = itemAt(e->position().toPoint());
-  int row = at ? indexRow(at) : count();
+  int pos = at ? this->row(at) : count();
   if (at) {
-    const int h = qMax(1, sizeHintForRow(indexRow(at)));
+    const int h = qMax(1, sizeHintForRow(pos));
     const int yInItem = e->position().toPoint().y() - visualItemRect(at).top();
-    if (yInItem > h / 2) ++row;
+    if (yInItem > h / 2) ++pos;
   }
-  for (const QString &r : refs) insertItem(row++, r);
+  for (const QString &r : refs) insertItem(pos++, r);
   e->acceptProposedAction();
   if (!refs.isEmpty()) emit refActivated(refs.first());
 }
@@ -172,7 +175,7 @@ LayoutPage::LayoutPage(QWidget *parent) : QWidget(parent) {
 
     connect(list, &QListWidget::currentTextChanged, this, [this, i] {
       if (loading_) return;
-      QListWidgetItem *it = list->currentItem();
+      QListWidgetItem *it = lists_[i]->currentItem();
       onListActivated(i, it ? it->text() : QString());
     });
     connect(list, &ModuleList::refActivated, this,
@@ -376,9 +379,9 @@ void LayoutPage::store(QJsonObject *bar) const {
 
 void LayoutPage::selectModule(const QString &ref) {
   for (int i = 0; i < 3; ++i) {
-    const int idx = lists_[i]->findText(ref);
-    if (idx >= 0) {
-      lists_[i]->setCurrentRow(idx);
+    for (int j = 0; j < lists_[i]->count(); ++j) {
+      if (lists_[i]->item(j)->text() != ref) continue;
+      lists_[i]->setCurrentRow(j);
       return;
     }
   }

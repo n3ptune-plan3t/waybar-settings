@@ -96,8 +96,8 @@ void BarPreview::drawChip(QPainter &p, const Chip &c) {
     p.drawPath(path);
   }
   p.setFont(buildFont(state_->fontStack, c.fontSize, c.weight, c.italic));
-  p.setPen(c.text);
-  p.drawText(c.rect, Qt::AlignCenter, c.text);
+  p.setPen(c.fg);
+  p.drawText(c.rect, Qt::AlignCenter, c.label);
 }
 
 void BarPreview::paintEvent(QPaintEvent *) {
@@ -123,11 +123,11 @@ void BarPreview::paintEvent(QPaintEvent *) {
     for (const QString &ref : refs) {
       Chip c;
       c.ref = ref;
-      c.text = sampleText(ref);
+      c.label = sampleText(ref);
       const ModuleStyle ms = st.modules.value(ref);
       const ResolvedModule m = resolveModule(ms, r, themes());
       c.fill = m.hasFill ? m.fill : (st.raised ? r.c[RSurface] : QColor());
-      c.text = m.hasText ? m.text : r.c[RText];
+      c.fg = m.hasText ? m.text : r.c[RText];
       c.border = m.hasBorder ? m.border : QColor();
       c.borderWidth = m.hasBorder ? qMax(1, m.borderWidth) : 0;
       c.radius = m.radius >= 0 ? m.radius : st.radius;
@@ -136,7 +136,7 @@ void BarPreview::paintEvent(QPaintEvent *) {
       c.italic = m.italic || st.italic;
       QFont f = buildFont(st.fontStack, c.fontSize, c.weight, c.italic);
       const QFontMetricsF fm(f);
-      c.rect = QRectF(0, 0, fm.horizontalAdvance(c.text) + st.padding * 2 + 6, fm.height() + 6);
+      c.rect = QRectF(0, 0, fm.horizontalAdvance(c.label) + st.padding * 2 + 6, fm.height() + 6);
       chips.append(c);
     }
     if (reverse) std::reverse(chips.begin(), chips.end());

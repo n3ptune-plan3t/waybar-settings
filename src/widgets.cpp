@@ -381,21 +381,28 @@ JsonEditor::JsonEditor(QWidget *parent) : QPlainTextEdit(parent) {
 
 void JsonEditor::validate() {
   if (updating_) return;
+  const QString text = toPlainText().trimmed();
   QJsonParseError err;
-  QJsonDocument::fromJson(toPlainText().toUtf8(), &err);
-  valid_ = err.error == QJsonParseError::NoError;
+  QJsonDocument::fromJson(text.toUtf8(), &err);
+  valid_ = err.error == QJsonParseError::NoError || text.isEmpty();
   setStyleSheet(valid_ ? QString() : QStringLiteral("QPlainTextEdit{border:1px solid palette(critical);}"));
   setToolTip(valid_ ? QString() : err.errorString());
   emit changed();
 }
 
 QJsonValue JsonEditor::value() const {
+  const QString text = toPlainText().trimmed();
+  if (text.isEmpty()) return QJsonValue(QJsonValue::Undefined);
   QJsonParseError err;
-  const QJsonDocument d = QJsonDocument::fromJson(toPlainText().toUtf8(), &err);
-  if (err.error != QJsonParseError::NoError) return QJsonValue(toPlainText());
+  const QJsonDocument wrapped = QJsonDocument::fromJson(("[ " + text + " ]").toUtf8(), &err);
+  if (err.error == QJsonParseError::NoError && wrapped.isArray() && wrapped.array().size() == 1)
+    return wrapped.array().at(0);
+  err = QJsonParseError();
+  const QJsonDocument d = QJsonDocument::fromJson(text.toUtf8(), &err);
+  if (err.error != QJsonParseError::NoError) return QJsonValue(text);
   if (d.isObject()) return d.object();
   if (d.isArray()) return d.array();
-  return QJsonValue(d.toVariant());
+  return QJsonValue(text);
 }
 
 void JsonEditor::setValue(const QJsonValue &v) {
@@ -720,7 +727,8 @@ void ModuleForm::rebuild(const QString &ref) {
     add(l);
   } else {
     auto *title = new QLabel(QStringLiteral("<b>%1</b> &nbsp; <code>%2</code>")
-                                 .arg(displayName(ref).toHtmlEscaped(), cssSelector(ref).toHtmlEscaped()));
+                                 .arg(displayName(ref).toHtmlEscaped(),
+                                      ::ws::cssSelector(ref).toHtmlEscaped()));
     title->setTextFormat(Qt::RichText);
     add(title);
     if (!def_->summary.isEmpty()) {
@@ -809,21 +817,23 @@ void ModuleForm::buildStyleBox(const std::function<void(QWidget *)> &add) {
   auto *clearStyle = new QPushButton(tr("Reset this module to the bar style"));
   v->addWidget(clearStyle);
 
-  const auto styleChanged = [this] {
+  const auto onStyleChanged = [this] {
     applyPreview();
     emit styleChanged();
   };
   for (ColorSpecWidget *w : {styleFill_, styleText_, styleBorder_})
-    connect(w, &ColorSpecWidget::changed, this, styleChanged);
-  for (const auto &p : stateTextEdits_) connect(p.second, &ColorSpecWidget::changed, this, styleChanged);
-  for (const auto &p : stateFillEdits_) connect(p.second, &ColorSpecWidget::changed, this, styleChanged);
-  connect(styleBorderWidth_, &QSpinBox::valueChanged, this, styleChanged);
-  connect(styleRadius_, &QSpinBox::valueChanged, this, styleChanged);
-  connect(stylePadding_, &QSpinBox::valueChanged, this, styleChanged);
-  connect(styleMargin_, &QSpinBox::valueChanged, this, styleChanged);
-  connect(styleFontSize_, &QSpinBox::valueChanged, this, styleChanged);
-  connect(styleWeight_, &QComboBox::currentIndexChanged, this, styleChanged);
-  connect(styleItalic_, &QCheckBox::toggled, this, styleChanged);
+    connect(w, &ColorSpecWidget::changed, this, onStyleChanged);
+  for (const auto &p : stateTextEdits_)
+    connect(p.second, &ColorSpecWidget::changed, this, onStyleChanged);
+  for (const auto &p : stateFillEdits_)
+    connect(p.second, &ColorSpecWidget::changed, this, onStyleChanged);
+  connect(styleBorderWidth_, &QSpinBox::valueChanged, this, onStyleChanged);
+  connect(styleRadius_, &QSpinBox::valueChanged, this, onStyleChanged);
+  connect(stylePadding_, &QSpinBox::valueChanged, this, onStyleChanged);
+  connect(styleMargin_, &QSpinBox::valueChanged, this, onStyleChanged);
+  connect(styleFontSize_, &QSpinBox::valueChanged, this, onStyleChanged);
+  connect(styleWeight_, &QComboBox::currentIndexChanged, this, onStyleChanged);
+  connect(styleItalic_, &QCheckBox::toggled, this, onStyleChanged);
   connect(clearStyle, &QPushButton::clicked, this, [this] {
     styleFill_->setSpec(ColorSpec());
     styleText_->setSpec(ColorSpec());

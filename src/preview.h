@@ -33,10 +33,10 @@ class BarPreview : public QWidget {
  private:
   struct Chip {
     QString ref;
-    QString text;
+    QString label;
     QRectF rect;
     QColor fill;
-    QColor text;
+    QColor fg;
     QColor border;
     int borderWidth = 0;
     int radius = 0;

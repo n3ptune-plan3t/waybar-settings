@@ -9,6 +9,7 @@
 #include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QLabel>
 #include <QMap>
@@ -19,6 +20,7 @@
 #include <QScrollArea>
 #include <QShortcut>
 #include <QStandardPaths>
+#include <QStatusBar>
 #include <QTabWidget>
 #include <QVBoxLayout>
 
@@ -52,7 +54,7 @@ QVector<Opt> barOptions() {
   v << s("output", "", "Output name, make/model/serial, \"!name\" to exclude, \"*\" as wildcard", G);
   v << ch("position", "top", "top|bottom|left|right", "Where the bar sits", G);
   v << ch("layer", "bottom", "bottom|top|overlay", "Wayland layer", G);
-  v << ch("mode", "", "default|dock|hide|invisible|overlay, or a mode from \"modes\"", L);
+  v << ch("mode", "", "default|dock|hide|invisible|overlay", "A Waybar preset, or a custom mode from \"modes\"", L);
   v << in("height", "Bar height in pixels; unset means automatic", G);
   v << in("width", "Bar width for a vertical bar; unset means automatic", G);
   v << in("spacing", "Gap between the module groups", G);
@@ -451,7 +453,7 @@ void MainWindow::load() {
   }
 
   bars_.clear();
-  bar_.clear();
+  bar_.reset();
   parseOk_ = true;
 
   QString err;

@@ -55,7 +55,7 @@ class JsoncDoc {
   // Replaces the root node; the new node may reuse nodes taken from this
   // document, whose original text is still available for untouched subtrees.
   void setRoot(const NodePtr &root) { root_ = root; }
-  NodePtr makeRootArray(const QList<NodePtr> &items);
+  static NodePtr makeRootArray(const QList<NodePtr> &items);
 
   static NodePtr member(const NodePtr &obj, const QString &key);
   static NodePtr ensureMember(const NodePtr &obj, const QString &key);

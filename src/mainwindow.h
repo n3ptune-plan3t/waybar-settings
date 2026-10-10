@@ -3,6 +3,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QVector>
 
 #include "jsonc.h"
 #include "layoutpage.h"
