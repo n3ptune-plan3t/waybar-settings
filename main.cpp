@@ -89,27 +89,62 @@ static const Scheme SCHEMES[] = {
 };
 static const int NS = sizeof(SCHEMES) / sizeof(SCHEMES[0]);
 
-struct Resolved { QColor bg, fg, ac, acTx, wn, wnTx, cr, crTx, gd; double alpha; QStringList notes; };
+struct Resolved {
+  QColor bg, fg, ac, acTx, wn, wnTx, cr, crTx, gd, surface, mute, mod[5];
+  double alpha; int style; QStringList notes;
+};
 
-// col: bg, fg, accent, warning, critical, good. Whatever the scheme/custom colors are, the result is
-// guaranteed: text >= 4.5:1 on the bar (also over any wallpaper), state fills >= 3:1 against the bar,
-// text on every fill >= 4.5:1.
-static Resolved resolve(const QColor col[6], int alphaPct) {
-  Resolved r; r.bg = col[0];
-  r.fg = lift(col[1], r.bg, 4.5);
-  if (r.fg != col[1])
-    r.notes << QString("text color adjusted (%1:1 -> %2:1)").arg(contrast(col[1], r.bg), 0, 'f', 1).arg(contrast(r.fg, r.bg), 0, 'f', 1);
+static QColor rot(const QColor &c, int deg) {  // hue rotation, keeps lightness
+  float h, sat, l, a; c.getHslF(&h, &sat, &l, &a);
+  if (h < 0) h = 0;
+  h = std::fmod(h + deg / 360.0f, 1.0f);
+  return QColor::fromHslF(h, std::max(sat, 0.45f), l);
+}
+
+// col: bg, fg, accent, warning, critical, good. style: 0 plain, 1 pills (raised module backgrounds),
+// 2 colored (per-module-group text colors). Whatever the colors are, the result is guaranteed:
+// every text color >= 4.5:1 on the bar (and on pills), also over any wallpaper (opacity is raised
+// if needed), state fills >= 3:1 against the bar, text on every fill >= 4.5:1.
+static Resolved resolve(const QColor col[6], int alphaPct, int style) {
+  Resolved r; r.style = style; r.bg = col[0];
+  QColor fg0 = lift(col[1], r.bg, 4.5);
+  if (fg0 != col[1])
+    r.notes << QString("text color adjusted (%1:1 -> %2:1)").arg(contrast(col[1], r.bg), 0, 'f', 1).arg(contrast(fg0, r.bg), 0, 'f', 1);
   r.ac = lift(col[2], r.bg, 3.0); r.wn = lift(col[3], r.bg, 3.0); r.cr = lift(col[4], r.bg, 3.0);
   if (r.ac != col[2] || r.wn != col[3] || r.cr != col[4]) r.notes << "accent/warning/critical adjusted for visibility";
-  r.gd = lift(col[5], r.bg, 4.5);
-  if (r.gd != col[5]) r.notes << "good color adjusted for readability";
+  // Text colors must be readable on the bar and (pills) on the pill background.
+  auto fix = [&](QColor c, const QColor &sf) {
+    c = lift(c, r.bg, 4.5);
+    if (style == 1 && contrast(c, sf) < 4.5) c = lift(c, sf, 4.5);
+    if (contrast(c, r.bg) < 4.5 || (style == 1 && contrast(c, sf) < 4.5)) {
+      auto m = [&](const QColor &e) { return style == 1 ? std::min(contrast(e, r.bg), contrast(e, sf)) : contrast(e, r.bg); };
+      c = m(Qt::white) >= m(Qt::black) ? QColor(Qt::white) : QColor(Qt::black);
+    }
+    return c;
+  };
+  auto okc = [&](const QColor &c, const QColor &sf) { return contrast(c, r.bg) >= 4.49 && (style != 1 || contrast(c, sf) >= 4.49); };
+  bool modAdj = false, gdAdj = false;
+  for (double k : {0.10, 0.07, 0.04, 0.0}) {  // pill tint is reduced until all text stays readable
+    r.surface = mix(r.bg, fg0, k);
+    r.fg = fix(fg0, r.surface); r.gd = fix(col[5], r.surface); r.mute = fix(mix(fg0, r.bg, 0.4), r.surface);
+    gdAdj = r.gd != col[5]; modAdj = false;
+    for (int i = 0; i < 5; i++) { QColor c = i ? rot(col[2], 72 * i) : QColor(col[2]); r.mod[i] = fix(c, r.surface); modAdj = modAdj || r.mod[i] != c; }
+    bool good = okc(r.fg, r.surface) && okc(r.gd, r.surface) && okc(r.mute, r.surface);
+    for (auto &m : r.mod) good = good && okc(m, r.surface);
+    if (style != 1 || good) { if (style == 1 && k < 0.10) r.notes << "pill tint reduced to keep text readable"; break; }
+  }
+  if (gdAdj) r.notes << "good color adjusted for readability";
+  if (style == 2 && modAdj) r.notes << "module colors adjusted for readability";
   r.acTx = textOn(r.ac, r.bg, r.fg); r.wnTx = textOn(r.wn, r.bg, r.fg); r.crTx = textOn(r.cr, r.bg, r.fg);
+  QList<QColor> texts{r.fg, r.gd, r.mute};
+  if (style == 2) for (auto &m : r.mod) texts << m;
   double a = alphaPct / 100.0, minA = 1.0;
   for (int p = 100; p >= 0; p--) {  // lowest opacity such that every opacity above it is also readable
     double k = p / 100.0; bool good = true;
-    for (QColor t : {QColor(Qt::black), QColor(Qt::white)}) good = good && contrast(r.fg, mix(t, r.bg, k)) >= 4.5;
-    if (!good) break;
-    minA = k;
+    for (QColor t : {QColor(Qt::black), QColor(Qt::white)})
+      for (auto &tx : texts) good = good && contrast(tx, mix(t, r.bg, k)) >= 4.5;
+      if (!good) break;
+      minA = k;
   }
   if (a < minA) { a = minA; r.notes << QString("opacity raised to %1% so text stays readable over any wallpaper").arg(qRound(minA * 100)); }
   r.alpha = a;
@@ -117,10 +152,13 @@ static Resolved resolve(const QColor col[6], int alphaPct) {
 }
 static QString previewHtml(const Resolved &r, const QColor &backdrop) {
   QColor eff = mix(backdrop, r.bg, r.alpha);
+  QColor mbg = r.style == 1 ? r.surface : eff;
+  auto tx = [&](int i) { return r.style == 2 ? r.mod[i] : r.fg; };
   auto sp = [](const QColor &bg, const QColor &fg, const QString &t) {
     return QString("<span style=\"background-color:%1;color:%2\">&nbsp;%3&nbsp;</span>&nbsp;").arg(bg.name(), fg.name(), t); };
-    return sp(eff, r.fg, "12:34") + sp(r.ac, r.acTx, "1") + sp(eff, r.fg, "2") + sp(r.wn, r.wnTx, "bat 20%") +
-    sp(r.cr, r.crTx, "bat 5%") + sp(eff, r.gd, "charging");
+    return sp(mbg, tx(0), "12:34") + sp(r.ac, r.acTx, "1") + sp(eff, r.fg, "2") + sp(mbg, tx(1), "cpu 8%") +
+    sp(mbg, tx(2), "net") + sp(mbg, tx(3), "vol 40%") + sp(r.wn, r.wnTx, "bat 20%") + sp(r.cr, r.crTx, "bat 5%") +
+    sp(mbg, r.gd, "charging");
 }
 
 class Win : public QMainWindow {
@@ -133,7 +171,7 @@ class Win : public QMainWindow {
   QListWidget *lists[3];
   const char *lkeys[3] = {"modules-left", "modules-center", "modules-right"};
   QTableWidget *tbl; QString curMod;
-  QCheckBox *manage; QFontComboBox *font;
+  QCheckBox *manage; QFontComboBox *fontPick; QListWidget *fontList; QComboBox *mstyle;
   QSpinBox *fsize, *alpha, *radius, *pad;
   QComboBox *schemeSel; QPushButton *cbtn[6]; QColor col[6]; QLabel *prevDark, *prevLight, *note;
   QPushButton *saveBtn, *applyBtn;
@@ -220,7 +258,7 @@ class Win : public QMainWindow {
     updatePreview();
   }
   void updatePreview() {
-    auto r = resolve(col, alpha->value());
+    auto r = resolve(col, alpha->value(), mstyle->currentIndex());
     prevDark->setText(previewHtml(r, Qt::black)); prevLight->setText(previewHtml(r, Qt::white));
     QString n = QString("Text contrast %1:1 (minimum enforced: 4.5:1)").arg(contrast(r.fg, r.bg), 0, 'f', 1);
     if (!r.notes.isEmpty()) n += "\nAuto-adjusted: " + r.notes.join("; ");
@@ -243,7 +281,19 @@ class Win : public QMainWindow {
         schemeSel->blockSignals(true); schemeSel->setCurrentIndex(NS); schemeSel->blockSignals(false);
         refreshColors(); });
     }
-    font = new QFontComboBox; f->addRow("Font", font);
+    mstyle = new QComboBox; mstyle->addItems({"Plain (scheme text color on every module)", "Pills (raised background per module)", "Colored (distinct color per module group)"});
+    f->addRow("Module style", mstyle);
+    fontPick = new QFontComboBox; fontPick->setEditable(true);
+    auto *addF = new QPushButton("Add"), *delF = new QPushButton("Remove");
+    fontList = new QListWidget; fontList->setDragDropMode(QAbstractItemView::InternalMove); fontList->setMaximumHeight(110);
+    fontList->addItem(QApplication::font().family());
+    auto *fr = new QHBoxLayout; fr->addWidget(fontPick, 1); fr->addWidget(addF); fr->addWidget(delF);
+    auto *fv = new QVBoxLayout; fv->addLayout(fr); fv->addWidget(fontList);
+    f->addRow("Fonts (fallback order, drag to reorder)", fv);
+    connect(addF, &QPushButton::clicked, this, [this] {
+      QString t = fontPick->currentText().trimmed();
+      if (!t.isEmpty() && fontList->findItems(t, Qt::MatchExactly).isEmpty()) fontList->addItem(t); });
+    connect(delF, &QPushButton::clicked, this, [this] { delete fontList->takeItem(fontList->currentRow()); });
     fsize = new QSpinBox; fsize->setRange(6, 72); fsize->setValue(13); f->addRow("Font size (px)", fsize);
     alpha = new QSpinBox; alpha->setRange(0, 100); alpha->setValue(90); f->addRow("Background opacity %", alpha);
     radius = new QSpinBox; radius->setRange(0, 50); f->addRow("Module radius (px)", radius);
@@ -254,6 +304,7 @@ class Win : public QMainWindow {
     f->addRow("Preview, dark wallpaper", prevDark); f->addRow("Preview, light wallpaper", prevLight); f->addRow(note);
     connect(schemeSel, &QComboBox::currentIndexChanged, this, [this](int i) { if (i >= 0 && i < NS) applyScheme(SCHEMES[i]); });
     connect(alpha, &QSpinBox::valueChanged, this, [this] { updatePreview(); });
+    connect(mstyle, &QComboBox::currentIndexChanged, this, [this] { updatePreview(); });
     applyScheme(SCHEMES[0]);
     tabs->addTab(w, "Style");
   }
@@ -376,7 +427,10 @@ class Win : public QMainWindow {
     auto it = QRegularExpression("(\\w+)=(?:\"([^\"]*)\"|(\\S+))").globalMatch(s.mid(a, b - a));
     while (it.hasNext()) {
       auto m = it.next(); QString k = m.captured(1), v = m.captured(2).isEmpty() ? m.captured(3) : m.captured(2);
-      if (k == "font") font->setCurrentFont(QFont(v));
+      if (k == "fonts" || k == "font") {
+        fontList->clear();
+        for (auto &x : v.split('|', Qt::SkipEmptyParts)) fontList->addItem(x);
+      } else if (k == "mstyle") mstyle->setCurrentIndex(qBound(0, v.toInt(), 2));
       else if (k == "size") fsize->setValue(v.toInt());
       else if (k == "alpha") alpha->setValue(v.toInt());
       else if (k == "radius") radius->setValue(v.toInt());
@@ -409,36 +463,69 @@ class Win : public QMainWindow {
       if (f.open(QIODevice::ReadOnly)) { old = QString::fromUtf8(f.readAll()); f.close(); }
       old.remove(QRegularExpression(QString("\\n*%1.*?%2\\n*").arg(QRegularExpression::escape(BEGIN), QRegularExpression::escape(END)),
                                     QRegularExpression::DotMatchesEverythingOption));
-      QString fam = font->currentFont().family();
-      Resolved r = resolve(col, alpha->value());
+      QStringList fl, q; bool generic = false;
+      for (int i = 0; i < fontList->count(); i++) {
+        QString n = fontList->item(i)->text().trimmed().remove('"'); if (n.isEmpty()) continue;
+        bool g = n == "sans-serif" || n == "serif" || n == "monospace";
+        generic = generic || g; fl << n; q << (g ? n : "\"" + n + "\"");
+      }
+      if (!generic) q << "sans-serif";
+      Resolved r = resolve(col, alpha->value(), mstyle->currentIndex());
       auto rgba = [](const QColor &c, double al) {
         return QString("rgba(%1, %2, %3, %4)").arg(c.red()).arg(c.green()).arg(c.blue()).arg(al, 0, 'f', 2); };
-        QString hdr = QString("/* ws scheme=\"%1\" font=\"%2\" size=%3 alpha=%4 radius=%5 pad=%6")
-        .arg(schemeSel->currentText(), fam).arg(fsize->value()).arg(alpha->value()).arg(radius->value()).arg(pad->value());
+        QString hdr = QString("/* ws scheme=\"%1\" fonts=\"%2\" size=%3 alpha=%4 radius=%5 pad=%6 mstyle=%7")
+        .arg(schemeSel->currentText(), fl.join('|')).arg(fsize->value()).arg(alpha->value()).arg(radius->value()).arg(pad->value()).arg(mstyle->currentIndex());
         const char *ck[6] = {"bg", "fg", "ac", "wn", "cr", "gd"};
         for (int i = 0; i < 6; i++) hdr += QString(" %1=%2").arg(ck[i], col[i].name());
         hdr += " */\n";
-      QString css = QString::fromUtf8(R"(* { font-family: "@FAM@"; font-size: @SIZE@px; }
-window#waybar { background-color: @BAR@; color: @FG@; }
-tooltip { background-color: @BG@; color: @FG@; border: 1px solid @BORDER@; }
-tooltip label { color: @FG@; }
-.modules-left > widget > *, .modules-center > widget > *, .modules-right > widget > * { padding: 0 @PAD@px; border-radius: @RAD@px; }
-#workspaces button, #tags button { color: @FG@; background: transparent; border: none; box-shadow: none; text-shadow: none; }
-#workspaces button:hover, #tags button:hover { background: @HOVER@; }
-#workspaces button.focused, #workspaces button.active, #tags button.focused { background: @AC@; color: @ACTX@; }
-#workspaces button.urgent, #tags button.urgent { background: @CR@; color: @CRTX@; }
-#battery.warning, #cpu.warning, #memory.warning, #disk.warning, #load.warning, #temperature.warning, #network.warning { background-color: @WN@; color: @WNTX@; }
-#battery.critical, #cpu.critical, #memory.critical, #disk.critical, #load.critical, #temperature.critical, #network.critical { background-color: @CR@; color: @CRTX@; }
-#battery.charging, #battery.plugged { background-color: transparent; color: @GD@; }
-      )");
-      css.replace("@FAM@", fam).replace("@SIZE@", QString::number(fsize->value()))
-      .replace("@BAR@", rgba(r.bg, r.alpha)).replace("@BG@", r.bg.name()).replace("@FG@", r.fg.name())
-      .replace("@BORDER@", rgba(r.fg, 0.35)).replace("@HOVER@", rgba(r.fg, 0.18))
-      .replace("@PAD@", QString::number(pad->value())).replace("@RAD@", QString::number(radius->value()))
-      .replace("@ACTX@", r.acTx.name()).replace("@AC@", r.ac.name())
-      .replace("@WNTX@", r.wnTx.name()).replace("@WN@", r.wn.name())
-      .replace("@CRTX@", r.crTx.name()).replace("@CR@", r.cr.name()).replace("@GD@", r.gd.name());
-      QString blk = "\n\n" + BEGIN + "\n" + hdr + css + END + "\n";
+      // Selectors covering every module (any module type, custom/*, groups) in all three sections.
+      auto sel = [](const QString &suf, const QString &pre = QString()) {
+        QStringList l; for (auto c : {".modules-left", ".modules-center", ".modules-right"}) l << pre + c + suf;
+        return l.join(", "); };
+        auto st = [&](const QStringList &classes, const QString &decl) {
+          QStringList l;
+          for (auto c : {".modules-left", ".modules-center", ".modules-right"})
+            for (auto &k : classes) l << "window#waybar " + QString(c) + " ." + k;
+            return l.join(", ") + " { " + decl + " }\n"; };
+          const QString P = "window#waybar ";
+          bool pills = r.style == 1;
+          QString css;
+          css += "* { font-family: " + q.join(", ") + "; font-size: @SIZE@px; }\n";
+          css += "window#waybar { background-color: @BAR@; color: @FG@; }\n";
+          css += "tooltip { background-color: @BG@; color: @FG@; border: 1px solid @BORDER@; }\ntooltip label { color: @FG@; }\n";
+          css += "menu, menuitem { background-color: @BG@; color: @FG@; }\nmenuitem:hover { background-color: @HOVER@; }\n";
+          css += sel(" > widget > *") + " { color: @FG@; padding: 0 @PAD@px; border-radius: @RAD@px;" +
+          (pills ? " background-color: @SURF@; margin: 2px;" : "") + " }\n";
+          css += sel(" button") + " { color: @FG@; background: transparent; border: none; box-shadow: none; text-shadow: none; border-radius: @RAD@px; }\n";
+          if (r.style == 2) {
+            static const struct { const char *ids; int c; } groups[] = {
+              {"clock,user,window,language,mode,submap,scratchpad,keyboard-state,privacy,systemd-failed-units,image", 0},
+              {"cpu,memory,disk,load,temperature", 1},
+              {"network,bluetooth", 2},
+              {"pulseaudio,wireplumber,backlight,mpris,mpd,cava,sndio,jack", 3},
+              {"battery,upower,power-profiles-daemon,idle_inhibitor,gamemode", 4}};
+              for (auto &g : groups) {
+                QStringList l; for (auto &id : QString(g.ids).split(',')) l << "#" + id;
+                css += l.join(", ") + " { color: @M" + QString::number(g.c) + "@; }\n";
+              }
+          }
+          css += sel(" button:hover", P) + " { background: @HOVER@; }\n";
+          css += st({"muted", "disabled", "disconnected", "off", "paused", "stopped", "empty", "deactivated"}, "color: @MUTE@;");
+          css += st({"charging", "plugged", "full", "connected", "activated", "playing", "on", "performance"}, "color: @GD@;");
+          css += sel(" button.focused", P) + ", " + sel(" button.active", P) + " { background: @AC@; color: @ACTX@; }\n";
+          css += st({"warning"}, "background-color: @WN@; color: @WNTX@;");
+          css += st({"critical", "urgent"}, "background-color: @CR@; color: @CRTX@;");
+          css += "#tray > .passive { -gtk-icon-effect: dim; }\n#tray > .needs-attention { background-color: @CR@; }\n";
+          css.replace("@SIZE@", QString::number(fsize->value()))
+          .replace("@BAR@", rgba(r.bg, r.alpha)).replace("@BG@", r.bg.name()).replace("@FG@", r.fg.name())
+          .replace("@BORDER@", rgba(r.fg, 0.35)).replace("@HOVER@", rgba(r.fg, 0.18))
+          .replace("@SURF@", r.surface.name()).replace("@MUTE@", r.mute.name())
+          .replace("@PAD@", QString::number(pad->value())).replace("@RAD@", QString::number(radius->value()))
+          .replace("@ACTX@", r.acTx.name()).replace("@AC@", r.ac.name())
+          .replace("@WNTX@", r.wnTx.name()).replace("@WN@", r.wn.name())
+          .replace("@CRTX@", r.crTx.name()).replace("@CR@", r.cr.name()).replace("@GD@", r.gd.name());
+          for (int i = 0; i < 5; i++) css.replace("@M" + QString::number(i) + "@", r.mod[i].name());
+          QString blk = "\n\n" + BEGIN + "\n" + hdr + css + END + "\n";
       if (!writeFile(cssPath, (old.trimmed() + blk).toUtf8())) return;
     }
     if (reload) QProcess::startDetached("pkill", {"-USR2", "waybar"});
