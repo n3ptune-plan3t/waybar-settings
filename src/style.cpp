@@ -329,11 +329,12 @@ ResolvedModule resolveModule(const ModuleStyle &ms, const Resolved &bar, const Q
     out.border = bd;
   }
   QList<QColor> refs;
-  if (out.hasFill)
+  if (out.hasFill) {
     refs << out.fill;
-  else {
+  } else {
     refs << bar.c[RBackground];
-    if (!QString::isEmpty()) refs << bar.c[RSurface];
+    // Only a raised (pill) background has to stay readable too.
+    if (bar.c[RSurface] != bar.c[RBackground]) refs << bar.c[RSurface];
   }
   auto worst = [&](const QColor &c) {
     double k = 1e9;

@@ -157,6 +157,7 @@ class OptForm : public QWidget {
   QWidget *makeEditor(const Opt &o);
   void applyRowState(Row *row);
 
+  QVBoxLayout *layout_ = nullptr;
   QVector<Row> rows_;
 };
 
@@ -184,6 +185,7 @@ class ModuleForm : public QWidget {
  private:
   void rebuild(const QString &ref);
   void buildStyleBox(const std::function<void(QWidget *)> &add);
+  void applyPreview();
 
   QString ref_;
   const ModuleDef *def_ = nullptr;

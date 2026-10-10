@@ -3,7 +3,6 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
-#include <QRegularExpression>
 
 namespace ws {
 namespace {
@@ -254,9 +253,13 @@ struct Renderer {
     return tail;
   }
 
+  // Drops the comma a trailing-comma array carries before its "]".
   static QString stripTrailingComma(const QString &s) {
-    QRegularExpression re(QStringLiteral(",(\\s*)$"));
-    return s.replace(re, QStringLiteral("\\1"));
+    const int i = s.lastIndexOf(QLatin1Char(','));
+    if (i < 0) return s;
+    QString out = s;
+    out.remove(i, 1);
+    return out;
   }
 
   QString tailAfter(int emittedEnd, const NodePtr &n, int depth, bool any) {
@@ -266,7 +269,7 @@ struct Renderer {
     return any ? QStringLiteral("\n") + QString(depth * 2, QLatin1Char(' ')) : QString();
   }
 
-  QString emit(const NodePtr &n, int depth) {
+  QString renderNode(const NodePtr &n, int depth) {
     if (!n) return QString();
     if (n->type == JType::Scalar) {
       if (n->dirty || n->start < 0) return jsonCompact(n->value);
@@ -291,7 +294,7 @@ struct Renderer {
       out += sep;
       out += src.mid(m.keyStart, m.keyEnd - m.keyStart);
       out += src.mid(m.keyEnd, m.value->start - m.keyEnd);
-      out += emit(m.value, depth + 1);
+      out += renderNode(m.value, depth + 1);
       prevEnd = m.value->end;
       lastFromSource = prevEnd;
       any = true;
@@ -300,7 +303,7 @@ struct Renderer {
       if (!m.isNew || m.removed) continue;
       if (any) out += QLatin1Char(',');
       out += QStringLiteral("\n") + itemIndent + jsonCompact(QJsonValue(m.key)) +
-             QStringLiteral(": ") + emit(m.value, depth + 1);
+             QStringLiteral(": ") + renderNode(m.value, depth + 1);
       any = true;
     }
     out += tailAfter(lastFromSource, n, depth, any);
@@ -325,7 +328,7 @@ struct Renderer {
       const QString sep = separator(prevEnd, it->start, QStringLiteral("\n") + itemIndent, !any);
       if (any) out += QLatin1Char(',');
       out += sep;
-      out += emit(it, depth + 1);
+      out += renderNode(it, depth + 1);
       prevEnd = it->end;
       lastFromSource = prevEnd;
       any = true;
@@ -335,7 +338,7 @@ struct Renderer {
         out += QStringLiteral(",\n") + itemIndent;
       else
         out += QStringLiteral("\n") + itemIndent;
-      out += emit(it, depth + 1);
+      out += renderNode(it, depth + 1);
       any = true;
     }
     out += stripTrailingComma(tailAfter(lastFromSource, n, depth, any));
@@ -372,7 +375,7 @@ bool JsoncDoc::parse(const QString &text, QString *error) {
 QString JsoncDoc::render() const {
   if (!root_) return src_;
   Renderer r(src_);
-  return r.emit(root_, 0);
+  return r.renderNode(root_, 0);
 }
 
 NodePtr JsoncDoc::makeScalar(const QJsonValue &v) {

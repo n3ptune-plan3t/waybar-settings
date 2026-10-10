@@ -19,8 +19,8 @@ namespace ws {
 namespace {
 
 const char *ROLE_TOOLTIPS[RCount] = {
-    "The bar itself. Waybar draws it with an alpha channel, so a partly transparent background "
-    "still has to stay readable.",
+    ("The bar itself. Waybar draws it with an alpha channel, so a partly transparent background "
+     "still has to stay readable."),
     "Default label colour.",
     "Focused and active buttons, and the underline when it uses the accent.",
     "The .warning class, for example a hot CPU or a nearly empty battery.",

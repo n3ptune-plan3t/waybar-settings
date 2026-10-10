@@ -347,10 +347,10 @@ const QVector<Opt> &optsMpd() {
       i("playing-interval", 1000, "Milliseconds between refreshes while playing", kBeh),
       i("timeout", 30, "Connection timeout in seconds", kBeh),
       s("unknown-tag", "N/A", "Text for missing tags", kFmt),
-      sn("format-stopped", "stopped", "Text while stopped", kFmt),
-      sn("format-paused", "paused", "Text while paused", kFmt),
-      sn("format-disconnected", "disconnected", "Text while disconnected", kFmt),
-      sn("tooltip-format-disconnected", "MPD (disconnected)", "Tooltip while disconnected", kFmt),
+      s("format-stopped", "stopped", "Text while stopped", kFmt),
+      s("format-paused", "paused", "Text while paused", kFmt),
+      s("format-disconnected", "disconnected", "Text while disconnected", kFmt),
+      s("tooltip-format-disconnected", "MPD (disconnected)", "Tooltip while disconnected", kFmt),
       j("state-icons", "Icons per state: {\"playing\":\"..\",\"paused\":\"..\"}", kFmt),
       j("consume-icons", "Icons for consume mode on/off", kFmt),
       j("random-icons", "Icons for random mode on/off", kFmt),
@@ -415,11 +415,11 @@ const QVector<Opt> &optsPulseaudio() {
       i("max-volume", 100, "Highest volume reachable by scrolling", kBeh),
       l("ignored-sinks", "Sinks to hide", kGen),
       j("sink-mapping", "Map a sink to a display name", kGen),
-      sn("format-source", "{volume}%", "Label while recording", kFmt),
-      sn("format-muted", "", "Label while muted", kFmt),
-      sn("format-source-muted", "", "Label while the source is muted", kFmt),
-      sn("format-bluetooth", "", "Label for Bluetooth devices", kFmt),
-      sn("format-bluetooth-muted", "", "Label for muted Bluetooth devices", kFmt),
+      s("format-source", "{volume}%", "Label while recording", kFmt),
+      s("format-muted", "", "Label while muted", kFmt),
+      s("format-source-muted", "", "Label while the source is muted", kFmt),
+      s("format-bluetooth", "", "Label for Bluetooth devices", kFmt),
+      s("format-bluetooth-muted", "", "Label for muted Bluetooth devices", kFmt),
   };
   return v;
 }
@@ -442,11 +442,11 @@ const QVector<Opt> &optsWireplumber() {
       d("scroll-step", 1.0, "Volume change per scroll step", kBeh),
       e("scroll-scale", "cubic_percent", "cubic|db|cubic_percent", "Volume scale while scrolling", kBeh),
       d("max-volume", 100.0, "Highest volume reachable by scrolling", kBeh),
-      sn("format-muted", "", "Label while muted", kFmt),
-      sn("format-source", "{volume}%", "Label while recording", kFmt),
-      sn("format-source-muted", "", "Label while the source is muted", kFmt),
-      sn("format-bluetooth", "", "Label for Bluetooth devices", kFmt),
-      sn("format-bluetooth-muted", "", "Label for muted Bluetooth devices", kFmt),
+      s("format-muted", "", "Label while muted", kFmt),
+      s("format-source", "{volume}%", "Label while recording", kFmt),
+      s("format-source-muted", "", "Label while the source is muted", kFmt),
+      s("format-bluetooth", "", "Label for Bluetooth devices", kFmt),
+      s("format-bluetooth-muted", "", "Label for muted Bluetooth devices", kFmt),
   };
   return v;
 }
@@ -480,8 +480,8 @@ const QVector<Opt> &optsTemperature() {
       sn("hwmon-by-name", "Legacy substring match for the sensor name", kAdv),
       in("warning-threshold", "Temperature at which the warning class appears", kBeh),
       in("critical-threshold", "Temperature at which the critical class appears", kBeh),
-      sn("format-warning", "", "Label while warning", kFmt),
-      sn("format-critical", "", "Label while critical", kFmt),
+      s("format-warning", "", "Label while warning", kFmt),
+      s("format-critical", "", "Label while critical", kFmt),
   };
   return v;
 }

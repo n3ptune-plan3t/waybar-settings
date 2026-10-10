@@ -1,9 +1,12 @@
 #include "widgets.h"
 
+#include "jsonc.h"
+
 #include <QAbstractItemModel>
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFontDatabase>
 #include <QFormLayout>
@@ -327,7 +330,7 @@ void StatesEditor::addRow(const QString &name, int threshold) {
   h->addWidget(r->nameEdit, 2);
   h->addWidget(r->spin, 1);
   rows_.append(r);
-  list_->addItem(w);
+  list_->addItem(new QListWidgetItem(w));
   connect(r->nameEdit, &QLineEdit::textChanged, this, [this, r](const QString &t) {
     r->name = t;
     emit changed();
@@ -428,6 +431,7 @@ void JsonEditor::setValue(const QJsonValue &v) {
 void OptForm::Row::clearToDefault() {
   const QJsonValue def = defaultValueOf(opt);
   if (auto *cb = qobject_cast<QCheckBox *>(editor)) cb->setChecked(def.toBool());
+  else if (auto *sb = qobject_cast<QDoubleSpinBox *>(editor)) sb->setValue(def.toDouble());
   else if (auto *sb = qobject_cast<QSpinBox *>(editor)) sb->setValue(def.toInt());
   else if (auto *cb = qobject_cast<QComboBox *>(editor)) cb->setCurrentText(def.toString());
   else if (auto *le = qobject_cast<QLineEdit *>(editor)) le->setText(def.toString());
@@ -441,6 +445,7 @@ void OptForm::Row::clearToDefault() {
 
 QJsonValue OptForm::Row::readRaw() const {
   if (auto *w = qobject_cast<QCheckBox *>(editor)) return QJsonValue(w->isChecked());
+  if (auto *w = qobject_cast<QDoubleSpinBox *>(editor)) return QJsonValue(w->value());
   if (auto *w = qobject_cast<QSpinBox *>(editor)) return QJsonValue(w->value());
   if (auto *w = qobject_cast<QComboBox *>(editor)) {
     const QString t = w->currentText();
@@ -472,14 +477,14 @@ QJsonValue OptForm::Row::read() const {
 }
 
 OptForm::OptForm(QWidget *parent) : QWidget(parent) {
-  auto *v = new QVBoxLayout(this);
-  v->setContentsMargins(0, 0, 0, 0);
-  v->setSpacing(6);
+  layout_ = new QVBoxLayout(this);
+  layout_->setContentsMargins(0, 0, 0, 0);
+  layout_->setSpacing(6);
 }
 
 void OptForm::setOptions(const QVector<Opt> &opts) {
-  while (layout()->count() > 0) {
-    QLayoutItem *item = layout()->takeAt(0);
+  while (layout_->count() > 0) {
+    QLayoutItem *item = layout_->takeAt(0);
     if (QWidget *w = item->widget()) w->deleteLater();
     delete item;
   }
@@ -520,9 +525,9 @@ void OptForm::setOptions(const QVector<Opt> &opts) {
       rows_.append(row);
       applyRowState(&rows_.last());
     }
-    layout()->addWidget(box);
+    layout_->addWidget(box);
   }
-  layout()->addStretch(1);
+  layout_->addStretch(1);
 }
 
 bool OptForm::hasInvalidJson() const {
@@ -546,7 +551,7 @@ QWidget *OptForm::makeEditor(const Opt &o) {
       break;
     }
     case OptKind::Double: {
-      auto *sb = new QSpinBox;
+      auto *sb = new QDoubleSpinBox;
       sb->setRange(0, 1000000);
       sb->setDecimals(2);
       sb->setSingleStep(0.5);
@@ -615,6 +620,8 @@ QWidget *OptForm::makeEditor(const Opt &o) {
 
   if (auto *cb = qobject_cast<QCheckBox *>(w))
     connect(cb, &QCheckBox::toggled, this, &OptForm::changed);
+  else if (auto *sb = qobject_cast<QDoubleSpinBox *>(w))
+    connect(sb, &QDoubleSpinBox::valueChanged, this, &OptForm::changed);
   else if (auto *sb = qobject_cast<QSpinBox *>(w))
     connect(sb, &QSpinBox::valueChanged, this, &OptForm::changed);
   else if (auto *cb = qobject_cast<QComboBox *>(w))
@@ -648,6 +655,7 @@ void OptForm::load(const QJsonObject &options) {
     const QJsonValue def = defaultValueOf(row.opt);
     const QJsonValue use = v.isUndefined() ? def : v;
     if (auto *cb = qobject_cast<QCheckBox *>(row.editor)) cb->setChecked(use.toBool());
+    else if (auto *sb = qobject_cast<QDoubleSpinBox *>(row.editor)) sb->setValue(use.toDouble());
     else if (auto *sb = qobject_cast<QSpinBox *>(row.editor)) sb->setValue(use.toInt());
     else if (auto *cb = qobject_cast<QComboBox *>(row.editor)) cb->setCurrentText(use.toString());
     else if (auto *le = qobject_cast<QLineEdit *>(row.editor)) le->setText(variantToText(v));
