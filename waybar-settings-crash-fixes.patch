@@ -1,0 +1,64 @@
+diff --git a/src/jsonc.cpp b/src/jsonc.cpp
+index 23f6915..128aaa4 100644
+--- a/src/jsonc.cpp
++++ b/src/jsonc.cpp
+@@ -137 +137 @@ namespace ws {
+-          m.value = scalar();
++          m.value = value();  // objects and arrays nest, not just scalars
+@@ -173 +173 @@ namespace ws {
+-          auto item = scalar();
++          auto item = value();
+diff --git a/src/layoutpage.cpp b/src/layoutpage.cpp
+index 2681d7f..6fc71d1 100644
+--- a/src/layoutpage.cpp
++++ b/src/layoutpage.cpp
+@@ -196,2 +196,3 @@ LayoutPage::LayoutPage(QWidget *parent) : QWidget(parent) {
+-      lists_[i]->insertItem(i + 1, ref);
+-      lists_[i]->setCurrentRow(i + 1);
++      const int at = lists_[i]->currentRow() + 1;
++      lists_[i]->insertItem(at, ref);
++      lists_[i]->setCurrentRow(at);
+@@ -226,0 +228,12 @@ LayoutPage::LayoutPage(QWidget *parent) : QWidget(parent) {
++LayoutPage::~LayoutPage() {
++  // The list widgets are children and die after this body runs. Their models
++  // emit rowsRemoved/currentTextChanged while being torn down, which would
++  // call back into a half-destroyed LayoutPage.
++  loading_ = true;
++  for (ModuleList *l : lists_) {
++    if (!l) continue;
++    l->disconnect(this);
++    if (l->model()) l->model()->disconnect(this);
++  }
++}
++
+diff --git a/src/layoutpage.h b/src/layoutpage.h
+index b3bd2b5..555afc1 100644
+--- a/src/layoutpage.h
++++ b/src/layoutpage.h
+@@ -42,0 +43 @@ class LayoutPage : public QWidget {
++  ~LayoutPage() override;
+diff --git a/src/mainwindow.cpp b/src/mainwindow.cpp
+index 3f07288..0b238ed 100644
+--- a/src/mainwindow.cpp
++++ b/src/mainwindow.cpp
+@@ -322,2 +322,5 @@ void MainWindow::commitBarPage() {
+-  if (rest.isObject())
+-    for (auto it = rest.toObject().begin(); it != rest.toObject().end(); ++it)
++  if (rest.isObject()) {
++    // Hold one QJsonObject: begin() and end() of two separate toObject()
++    // temporaries never compare equal, so the loop ran off the end.
++    const QJsonObject restObj = rest.toObject();
++    for (auto it = restObj.begin(); it != restObj.end(); ++it)
+@@ -324,0 +328 @@ void MainWindow::commitBarPage() {
++  }
+diff --git a/src/widgets.cpp b/src/widgets.cpp
+index 8bc8544..2702b3f 100644
+--- a/src/widgets.cpp
++++ b/src/widgets.cpp
+@@ -955,2 +955,4 @@ namespace ws {
+-      if (ev.isObject())
+-        for (auto it = ev.toObject().begin(); it != ev.toObject().end(); ++it) out.insert(it.key(), it.value());
++      if (ev.isObject()) {
++        const QJsonObject evObj = ev.toObject();
++        for (auto it = evObj.begin(); it != evObj.end(); ++it) out.insert(it.key(), it.value());
++      }

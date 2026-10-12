@@ -319,9 +319,13 @@ void MainWindow::commitBarPage() {
       JsoncDoc::removeMember(bar_, o.key);
   }
   const QJsonValue rest = barExtra_->value();
-  if (rest.isObject())
-    for (auto it = rest.toObject().begin(); it != rest.toObject().end(); ++it)
+  if (rest.isObject()) {
+    // Hold one QJsonObject: begin() and end() of two separate toObject()
+    // temporaries never compare equal, so the loop ran off the end.
+    const QJsonObject restObj = rest.toObject();
+    for (auto it = restObj.begin(); it != restObj.end(); ++it)
       JsoncDoc::setValue(bar_, it.key(), it.value());
+  }
 }
 
 void MainWindow::pushSectionsIntoNode() {

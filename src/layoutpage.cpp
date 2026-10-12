@@ -193,8 +193,9 @@ LayoutPage::LayoutPage(QWidget *parent) : QWidget(parent) {
       QListWidgetItem *it = lists_[i]->currentItem();
       if (!it) return;
       const QString ref = uniqueAlias(it->text());
-      lists_[i]->insertItem(i + 1, ref);
-      lists_[i]->setCurrentRow(i + 1);
+      const int at = lists_[i]->currentRow() + 1;
+      lists_[i]->insertItem(at, ref);
+      lists_[i]->setCurrentRow(at);
     });
   }
   mv->addLayout(listsRow, 1);
@@ -222,6 +223,18 @@ LayoutPage::LayoutPage(QWidget *parent) : QWidget(parent) {
     emit changed();
     emit previewChanged();
   });
+}
+
+LayoutPage::~LayoutPage() {
+  // The list widgets are children and die after this body runs. Their models
+  // emit rowsRemoved/currentTextChanged while being torn down, which would
+  // call back into a half-destroyed LayoutPage.
+  loading_ = true;
+  for (ModuleList *l : lists_) {
+    if (!l) continue;
+    l->disconnect(this);
+    if (l->model()) l->model()->disconnect(this);
+  }
 }
 
 QStringList LayoutPage::allRefs() const {

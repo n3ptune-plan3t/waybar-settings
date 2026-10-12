@@ -40,6 +40,7 @@ class LayoutPage : public QWidget {
   Q_OBJECT
  public:
   explicit LayoutPage(QWidget *parent = nullptr);
+  ~LayoutPage() override;
 
   void load(const QJsonObject &bar);
   void store(QJsonObject *bar) const;

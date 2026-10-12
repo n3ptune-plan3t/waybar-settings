@@ -134,7 +134,7 @@ namespace ws {
             return nullptr;
           }
           ++i;
-          m.value = scalar();
+          m.value = value();  // objects and arrays nest, not just scalars
           if (!m.value) return nullptr;
           n->members.append(m);
           skipTrivia();
@@ -170,7 +170,7 @@ namespace ws {
           return n;
         }
         while (true) {
-          auto item = scalar();
+          auto item = value();
           if (!item) return nullptr;
           n->items.append(item);
           skipTrivia();

@@ -952,8 +952,10 @@ namespace ws {
     QJsonObject out = optForm_ ? optForm_->store() : QJsonObject();
     if (extra_) {
       const QJsonValue ev = extra_->value();
-      if (ev.isObject())
-        for (auto it = ev.toObject().begin(); it != ev.toObject().end(); ++it) out.insert(it.key(), it.value());
+      if (ev.isObject()) {
+        const QJsonObject evObj = ev.toObject();
+        for (auto it = evObj.begin(); it != evObj.end(); ++it) out.insert(it.key(), it.value());
+      }
     }
     if (options) *options = out;
 
